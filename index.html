@@ -166,6 +166,24 @@
   @keyframes cut { to { transform: scaleX(1); } }
   @keyframes flash { 0%, 35% { background: rgba(255, 255, 255, 0); } 50% { background: rgba(255, 255, 255, .96); } 100% { background: rgba(255, 255, 255, 0); } }
 
+  /* ---------- countdown gate (shown until the birthday starts) ---------- */
+  #gate { display: none; position: relative; z-index: 5; min-height: 100vh; min-height: 100dvh; align-items: center; justify-content: center; padding: 120px 18px 40px; text-align: center; }
+  body.locked #gate { display: flex; }
+  body.locked #ask { display: none; }
+  .gate-in { width: min(560px, 100%); }
+  .gate-in > .kanji { font-size: 54px; color: var(--red); letter-spacing: 12px; text-shadow: 0 0 26px rgba(229, 56, 79, .7); animation: sealPulse 2.4s ease-in-out infinite; }
+  @keyframes sealPulse { 50% { transform: scale(1.08); text-shadow: 0 0 44px rgba(229, 56, 79, 1); } }
+  .gate-in h1 { font-size: clamp(34px, 9vw, 58px); line-height: 1.2; color: var(--cream); text-shadow: 0 0 22px rgba(178, 141, 255, .6); }
+  .gate-in p { color: var(--mist); font-size: 18px; font-weight: 500; margin-top: 6px; }
+  .gate-in p b { color: var(--yellow); }
+  .count { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0 22px; }
+  .count > div { background: var(--checks); padding: 6px; border-radius: 22px; box-shadow: var(--glow); }
+  .count > div > div { background: var(--cream); color: var(--ink); border-radius: 17px; padding: 14px 4px 10px; }
+  .count b { display: block; font-size: clamp(34px, 10vw, 58px); font-weight: 800; line-height: 1; color: var(--red); font-variant-numeric: tabular-nums; }
+  .count b.tick { animation: tickNum .4s cubic-bezier(.2, 1.5, .4, 1); }
+  @keyframes tickNum { from { transform: translateY(-40%) scale(1.25); opacity: 0; } }
+  .count span { font-size: 14px; font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1.5px; }
+
   /* ---------- reveal ---------- */
   #party { display: none; position: relative; z-index: 5; }
   body.revealed #ask { display: none; }
@@ -383,7 +401,7 @@
   @media (prefers-reduced-motion: reduce) { .petal, .ember { display: none; } }
 </style>
 </head>
-<body>
+<body class="locked">
 
 <!-- shared patterns for the panda outfits -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -409,6 +427,22 @@
   <div id="bubble">mmph!</div>
   <div class="flip"><div class="panda-body" data-panda></div></div>
 </div>
+
+<!-- ============ COUNTDOWN GATE ============ -->
+<main id="gate">
+  <div class="gate-in">
+    <div class="kanji">封印</div>
+    <h1>Sealed until midnight</h1>
+    <p>Something special unlocks for <b id="gate-name"></b> on <b id="gate-date"></b></p>
+    <div class="count">
+      <div><div><b id="cd-d">00</b><span>days</span></div></div>
+      <div><div><b id="cd-h">00</b><span>hours</span></div></div>
+      <div><div><b id="cd-m">00</b><span>mins</span></div></div>
+      <div><div><b id="cd-s">00</b><span>secs</span></div></div>
+    </div>
+    <p>No peeking, slayer. The crow is watching 👀</p>
+  </div>
+</main>
 
 <!-- ============ QUESTIONS ============ -->
 <main id="ask">
@@ -552,6 +586,8 @@
 const CONFIG = {
   name: 'Harshini',
   birthYear: 2005,
+  // The site stays locked behind a countdown until this moment (her phone's local time).
+  unlockAt: '2026-11-20T00:00:00',
   from: 'Your best friend',               // how the letter is signed
 
   heroLine: 'To the strongest, cutest slayer I know. The world got so much brighter in 2005 🐼',
@@ -814,7 +850,7 @@ function flee(px, py) {
 }
 // mouse: run before the cursor even arrives
 document.addEventListener('pointermove', e => {
-  if (e.pointerType !== 'mouse' || document.body.classList.contains('revealed') || card.classList.contains('sword-step')) return;
+  if (e.pointerType !== 'mouse' || document.body.classList.contains('locked') || document.body.classList.contains('revealed') || card.classList.contains('sword-step')) return;
   const r = noBtn.getBoundingClientRect(), m = 34;
   if (e.clientX > r.left - m && e.clientX < r.right + m && e.clientY > r.top - m && e.clientY < r.bottom + m) flee(e.clientX, e.clientY);
 });
@@ -1132,6 +1168,56 @@ addEventListener('keydown', e => {
 })();
 
 renderStep();
+
+/* ---------- countdown gate ----------
+   To test the site before the day, open it with ?preview at the end of the
+   address, e.g.  index.html?preview                                        */
+(function () {
+  const target = new Date(CONFIG.unlockAt).getTime();
+  const preview = /preview/i.test(location.search + location.hash);
+  const slash = $('#slash'), gate = $('#gate');
+  const els = { d: $('#cd-d'), h: $('#cd-h'), m: $('#cd-m'), s: $('#cd-s') };
+  let timer;
+
+  function slashOpen() {
+    slash.classList.add('go');
+    setTimeout(() => {
+      document.body.classList.remove('locked');
+      card.classList.remove('swap'); void card.offsetWidth; card.classList.add('swap');
+      burst(120, innerWidth / 2, innerHeight / 2.5);
+    }, 480);
+    setTimeout(() => slash.classList.remove('go'), 1250);
+  }
+  function set(el, v) {
+    const t = String(v).padStart(2, '0');
+    if (el.textContent === t) return;
+    el.textContent = t;
+    el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+  }
+  function update() {
+    const left = target - Date.now();
+    if (left <= 0) {
+      clearInterval(timer);
+      Object.values(els).forEach(el => set(el, 0));
+      return slashOpen();
+    }
+    const s = Math.floor(left / 1000);
+    set(els.d, Math.floor(s / 86400));
+    set(els.h, Math.floor(s / 3600) % 24);
+    set(els.m, Math.floor(s / 60) % 60);
+    set(els.s, s % 60);
+  }
+
+  if (preview || Date.now() >= target) {      // already her birthday: slash straight in
+    gate.style.display = 'none';
+    setTimeout(slashOpen, 400);
+    return;
+  }
+  $('#gate-name').textContent = CONFIG.name;
+  $('#gate-date').textContent = new Date(target).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) + ', 12:00 AM';
+  update();
+  timer = setInterval(update, 250);
+})();
 </script>
 </body>
 </html>
